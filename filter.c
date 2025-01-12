@@ -1,144 +1,166 @@
 #include "bmp.h"
 #include <pthread.h>
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-// Estructura para pasar datos a cada hilo
+int boxFilter[3][3] = {
+    {1, 1, 1},
+    {1, 1, 1},
+    {1, 1, 1}};
+
 typedef struct
 {
     BMP_Image *imageIn;
     BMP_Image *imageOut;
     int startRow;
     int endRow;
-    int (*boxFilter)[3]; // Filtro de 3x3
-} ThreadData;
+    int boxFilter[3][3];
+} ThreadArgs;
 
-// Aplicar filtro en una imagen de manera secuencial
+void printPixelMatrix(BMP_Image *image)
+{
+    int width = image->header.width_px;
+    int height = image->header.height_px;
+
+    for (int y = 0; y < height; y++)
+    {
+        for (int x = 0; x < width; x++)
+        {
+            Pixel *pixel = &image->pixels[y][x];
+            printf("(%d, %d, %d) ", pixel->red, pixel->green, pixel->blue);
+        }
+        printf("\n");
+    }
+}
+
+/* Aplica el filtro de caja a la imagen de entrada y escribe el resultado en la imagen de salida.
+   Maneja bordes colocando negro por defecto.
+*/
 void apply(BMP_Image *imageIn, BMP_Image *imageOut)
 {
-    // Filtro básico de 3x3
-    int boxFilter[3][3] = {
-        {1, 1, 1},
-        {1, 1, 1},
-        {1, 1, 1}};
+    printf("Funcion apply");
+    int width = imageIn->header.width_px;
+    int height = imageIn->header.height_px;
+    
+    for (int y = 0; y < height; y++)
+    {
+        for (int x = 0; x < width; x++)
+        {
+
+            Pixel *outPixel = &imageOut->pixels[y][x];
+
+            // Si está en el borde, píxel negro
+            if (y == 0 || y == height - 1 || x == 0 || x == width - 1)
+            {
+                outPixel->red = 0;
+                outPixel->green = 0;
+                outPixel->blue = 0;
+            }
+            else
+            {
+                // Filtro 3x3 en la zona central
+                int sum[3] = {0, 0, 0};
+                for (int ky = -1; ky <= 1; ky++)
+                {
+                    for (int kx = -1; kx <= 1; kx++)
+                    {
+                        Pixel *pixel = &imageIn->pixels[y + ky][x + kx];
+                        sum[0] += pixel->red;
+                        sum[1] += pixel->green;
+                        sum[2] += pixel->blue;
+                    }
+                }
+                outPixel->red = sum[0] / 9;
+                outPixel->green = sum[1] / 9;
+                outPixel->blue = sum[2] / 9;
+            }
+        }
+    }
+}
+/* Esta función es la rutina que ejecutarán los hilos.
+   Maneja bordes colocando negro por defecto.
+*/
+void *filterThreadWorker(void *args)
+{
+    ThreadArgs *threadArgs = (ThreadArgs *)args;
+    BMP_Image *imageIn = threadArgs->imageIn;
+    BMP_Image *imageOut = threadArgs->imageOut;
+    int startRow = threadArgs->startRow;
+    int endRow = threadArgs->endRow;
     int width = imageIn->header.width_px;
     int height = imageIn->header.height_px;
 
-    printf("    Aplicando el filtro a una imagen de tamaño %dx%d\n", width, height);
-
-    for (int i = 1; i < height - 1; i++) // Recorrer de arriba hacia abajo
+    for (int y = startRow; y < endRow; y++)
     {
-        for (int j = 1; j < width - 1; j++)
+        for (int x = 0; x < width; x++)
         {
-            int sumRed = 0, sumGreen = 0, sumBlue = 0;
+            int sum[3] = {0, 0, 0};
+            int validCount = 0;
 
-            for (int m = -1; m <= 1; m++)
+            for (int ky = -1; ky <= 1; ky++)
             {
-                for (int n = -1; n <= 1; n++)
+                for (int kx = -1; kx <= 1; kx++)
                 {
-                    int pY = i + m;
-                    int pX = j + n;
+                    int yy = y + ky;
+                    int xx = x + kx;
 
-                    // Verificar que el píxel esté dentro de los límites
-                    Pixel *pixel = &imageIn->pixels[pY][pX];
-                    sumRed += pixel->red * boxFilter[m + 1][n + 1];
-                    sumGreen += pixel->green * boxFilter[m + 1][n + 1];
-                    sumBlue += pixel->blue * boxFilter[m + 1][n + 1];
-                }
-            }
-
-            // Asignar el promedio normalizado
-            sumRed /= 9;
-            sumGreen /= 9;
-            sumBlue /= 9;
-
-            imageOut->pixels[i][j].red = sumRed;
-            imageOut->pixels[i][j].green = sumGreen;
-            imageOut->pixels[i][j].blue = sumBlue;
-        }
-    }
-}
-
-// Función de trabajo para los hilos
-void *filterThreadWorker(void *args)
-{
-    ThreadData *data = (ThreadData *)args;
-
-    BMP_Image *imageIn = data->imageIn;
-    BMP_Image *imageOut = data->imageOut;
-    int(*boxFilter)[3] = data->boxFilter; // Obtener el filtro
-
-    printf("Debug: Thread %ld processing rows from %d to %d\n", pthread_self(), data->startRow, data->endRow);
-
-    for (int i = data->startRow; i < data->endRow; i++) // Procesar filas según rango
-    {
-        for (int j = 1; j < imageIn->header.width_px - 1; j++)
-        {
-            int sumRed = 0, sumGreen = 0, sumBlue = 0;
-
-            for (int m = -1; m <= 1; m++)
-            {
-                for (int n = -1; n <= 1; n++)
-                {
-                    int pY = i + m;
-                    int pX = j + n;
-
-                    // Verificar que el píxel esté dentro de los límites
-                    if (pY < 0 || pY >= imageIn->header.height_px || pX < 0 || pX >= imageIn->header.width_px)
+                    if (yy >= 0 && yy < height && xx >= 0 && xx < width)
                     {
-                        continue; // Si el píxel está fuera de los límites, lo saltamos
+                        // Píxel dentro de los límites
+                        Pixel *pixel = &imageIn->pixels[yy][xx];
+                        sum[0] += pixel->red * threadArgs->boxFilter[ky + 1][kx + 1];
+                        sum[1] += pixel->green * threadArgs->boxFilter[ky + 1][kx + 1];
+                        sum[2] += pixel->blue * threadArgs->boxFilter[ky + 1][kx + 1];
+                        validCount++;
                     }
-
-                    Pixel *pixel = &imageIn->pixels[pY][pX];
-                    sumRed += pixel->red * boxFilter[m + 1][n + 1];
-                    sumGreen += pixel->green * boxFilter[m + 1][n + 1];
-                    sumBlue += pixel->blue * boxFilter[m + 1][n + 1];
                 }
             }
 
-            // Asignar el promedio normalizado
-            sumRed /= 9;
-            sumGreen /= 9;
-            sumBlue /= 9;
-
-            imageOut->pixels[i][j].red = sumRed;
-            imageOut->pixels[i][j].green = sumGreen;
-            imageOut->pixels[i][j].blue = sumBlue;
+            Pixel *outPixel = &imageOut->pixels[y][x];
+            if (validCount > 0)
+            {
+                outPixel->red = sum[0] / validCount;
+                outPixel->green = sum[1] / validCount;
+                outPixel->blue = sum[2] / validCount;
+            }
+            else
+            {
+                // Negro por defecto
+                outPixel->red = 0;
+                outPixel->green = 0;
+                outPixel->blue = 0;
+            }
         }
     }
 
-    printf("Debug: Thread %ld finished processing rows from %d to %d\n", pthread_self(), data->startRow, data->endRow);
-    pthread_exit(NULL);
+    return NULL;
 }
 
-// Función que aplica el filtro de forma paralela usando múltiples hilos
-void applyParallel(BMP_Image *imageIn, BMP_Image *imageOut, int numThreads, int boxFilter[3][3])
+/*  Divide la imagen en secciones y lanza varios hilos para procesar cada sección en paralelo.
+    Cada hilo ejecuta filterThreadWorker para aplicar el filtro a su sección de la imagen.
+*/
+void applyParallel(BMP_Image *imageIn, BMP_Image *imageOut, int numThreads)
 {
-    printf("Debug: Applying filter in parallel with %d threads...\n", numThreads);
-
     pthread_t threads[numThreads];
-    ThreadData threadData[numThreads];
+    ThreadArgs threadArgs[numThreads];
 
-    int rowsPerThread = imageIn->header.height_px / numThreads;
+    int height = imageIn->header.height_px;
+    int rowsPerThread = height / numThreads;
+
     for (int i = 0; i < numThreads; i++)
     {
-        threadData[i].imageIn = imageIn;
-        threadData[i].imageOut = imageOut;
-        threadData[i].startRow = i * rowsPerThread;
-        threadData[i].endRow = (i == numThreads - 1) ? imageIn->header.height_px : (i + 1) * rowsPerThread;
-        threadData[i].boxFilter = boxFilter;
+        threadArgs[i].imageIn = imageIn;
+        threadArgs[i].imageOut = imageOut;
+        threadArgs[i].startRow = i * rowsPerThread;
+        threadArgs[i].endRow = (i == numThreads - 1) ? height : (i + 1) * rowsPerThread;
+        memcpy(threadArgs[i].boxFilter, boxFilter, sizeof(int) * 9);
 
-        printf("Debug: Creating thread %d for rows %d to %d\n", i, threadData[i].startRow, threadData[i].endRow);
-
-        pthread_create(&threads[i], NULL, filterThreadWorker, (void *)&threadData[i]);
+        pthread_create(&threads[i], NULL, filterThreadWorker, &threadArgs[i]);
     }
 
-    // Esperar a que todos los hilos terminen
     for (int i = 0; i < numThreads; i++)
     {
         pthread_join(threads[i], NULL);
-        printf("Debug: Thread %d joined.\n", i);
     }
-
-    printf("Debug: Filter applied successfully.\n");
 }
