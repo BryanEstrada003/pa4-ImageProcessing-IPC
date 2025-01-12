@@ -1,5 +1,12 @@
 # pa3: Binary Files and Processing Image
 
+## Excecute:
+~~~bash
+./ex5 testcases/airplane.bmp outputs/airplane_out.bmp
+~~~
+
+Currently, this program just copy the img in testcases and paste in outputs with bmp for testing the create bitmap image
+
 ## Objetivos:
 En esta tarea de programación aprenderá:
 - Leer / escribir archivos binarios 
@@ -144,7 +151,4 @@ Nota: **No debe usar el código desde fuentes de internet que resuelve este assi
 
 > Creditos de este assigment al [Dr. Milind Kulkarni](https://engineering.purdue.edu/~milind/) researcher of Programming Languages and Compilers. Adaptado del sitio [ECE 264: Advanced C Programming](https://engineering.purdue.edu/~milind/ece264/2017spring/index.php)
 
-# pa4-ImageProcessing-IPC
-# pa4-ImageProcessing-IPC
-# pa4-ImageProcessing-IPC
-# pa4-ImageProcessing-IPC
+
