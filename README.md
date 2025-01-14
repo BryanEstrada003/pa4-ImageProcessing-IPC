@@ -2,10 +2,21 @@
 
 ## Excecute:
 ~~~bash
-./ex5 testcases/airplane.bmp outputs/airplane_out.bmp
+./ex5 testcases/any_image.bmp outputs/output.bmp
 ~~~
 
-Currently, this program just copy the img in testcases and paste in outputs with bmp for testing the create bitmap image
+or, the other way:
+~~~bash
+make test
+~~~
+
+Currently, this program apply blur filter complete.
+
+## Next Step:
+- Code the blur filter for the top half of the image.
+- Code the edge filter for the bottom half of the image.
+- Combine the blurred image (top half) with the edge-detected image (bottom half).
+
 
 ## Objetivos:
 En esta tarea de programación aprenderá:
