@@ -58,7 +58,6 @@ BMP_Image *createBMPImage(FILE *fptr)
   int width = image->header.width_px;
   int height = image->header.height_px;
   int bytesPerPixel = image->header.bits_per_pixel / 8;
-  int dataSize = width * height * bytesPerPixel;
 
   image->norm_height = abs(height);
   image->bytes_per_pixel = bytesPerPixel;
@@ -90,7 +89,7 @@ BMP_Image *createBMPImage(FILE *fptr)
 
   // Read the image data
   printf("  Reading image data\n");
-  readImageData(fptr, image, dataSize);
+  readImageData(fptr, image);
   if (image->pixels == NULL)
   {
     freeImage(image);
@@ -103,7 +102,7 @@ BMP_Image *createBMPImage(FILE *fptr)
 /* The input arguments are the source file pointer, the image data pointer, and the size of image data.
  * The functions reads data from the source into the image data matriz of pixels.
  */
-void readImageData(FILE *fptr, BMP_Image *image, int dataSize)
+void readImageData(FILE *fptr, BMP_Image *image)
 {
   int rowSize = (image->header.width_px * image->bytes_per_pixel + 3) & ~3; // Row size is padded to the nearest multiple of 4 bytes
   for (int i = 0; i < image->header.height_px; i++)

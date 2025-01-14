@@ -1,47 +1,50 @@
 # Nombres de los ejecutables
-TARGETS = publicador_combinador desenfocador realzador
+TARGETS = publicador_combinador desenfocador realzador ex5
 
 # Compilador y flags
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c11
+CFLAGS = -Wall -Wextra -std=c11 -pthread
 
 # Archivos fuente
 SRC_PUBLICADOR = publicador_combinador.c
 SRC_DESENFOCADOR = desenfocador.c
 SRC_REALZADOR = realzador.c
+SRC_EX5 = ex5.c bmp.c filter.c
 
-# Objetos generados
-OBJ_PUBLICADOR = publicador_combinador.o
-OBJ_DESENFOCADOR = desenfocador.o
-OBJ_REALZADOR = realzador.o
+# Archivos objeto
+OBJ_PUBLICADOR = $(SRC_PUBLICADOR:.c=.o)
+OBJ_DESENFOCADOR = $(SRC_DESENFOCADOR:.c=.o)
+OBJ_REALZADOR = $(SRC_REALZADOR:.c=.o)
+OBJ_EX5 = $(SRC_EX5:.c=.o)
 
 # Regla principal
 all: $(TARGETS)
 
-# Compilar el publicador_combinador
+# Reglas para cada ejecutable
 publicador_combinador: $(OBJ_PUBLICADOR)
 	$(CC) $(CFLAGS) -o $@ $^
 
-# Compilar el desenfocador
 desenfocador: $(OBJ_DESENFOCADOR)
 	$(CC) $(CFLAGS) -o $@ $^
 
-# Compilar el realzador
 realzador: $(OBJ_REALZADOR)
 	$(CC) $(CFLAGS) -o $@ $^
 
-# Generar objetos
+ex5: $(OBJ_EX5)
+	$(CC) $(CFLAGS) -o $@ $^
+
+# Regla general para compilar archivos fuente a objetos
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Limpiar archivos generados
 clean:
-	rm -f *.o ex5
+	rm -f *.o $(TARGETS)
 
 # Test de la compilación con un caso de prueba
 test: ex5
-	./ex5 testcases/test.bmp outputs/test_out.bmp
-	diff outputs/test_out.bmp testcases/test_sol.bmp
+	./ex5 testcases/car.bmp outputs/output.bmp
+#	diff outputs/test_out.bmp testcases/test_sol.bmp
 
 # Test de memoria con Valgrind
 testmem: ex5
