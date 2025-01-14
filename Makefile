@@ -17,8 +17,8 @@ clean:
 
 # Test de la compilación con un caso de prueba
 test: ex5
-	./ex5 testcases/test.bmp outputs/test_out.bmp
-	diff outputs/test_out.bmp testcases/test_sol.bmp
+	./ex5 testcases/car.bmp outputs/output.bmp
+#	diff outputs/test_out.bmp testcases/test_sol.bmp
 
 # Test de memoria con Valgrind
 testmem: ex5

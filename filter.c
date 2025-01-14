@@ -5,9 +5,9 @@
 #include <stdlib.h>
 
 int boxFilter[3][3] = {
-    {1, 1, 1},
-    {1, 1, 1},
-    {1, 1, 1}};
+    {0.0625, 0.125, 0.0625},
+    {0.125, 0.25, 0.125},
+    {0.0625, 0.125, 0.0625}};
 
 typedef struct
 {
@@ -18,22 +18,6 @@ typedef struct
     int boxFilter[3][3];
 } ThreadArgs;
 
-void printPixelMatrix(BMP_Image *image)
-{
-    int width = image->header.width_px;
-    int height = image->header.height_px;
-
-    for (int y = 0; y < height; y++)
-    {
-        for (int x = 0; x < width; x++)
-        {
-            Pixel *pixel = &image->pixels[y][x];
-            printf("(%d, %d, %d) ", pixel->red, pixel->green, pixel->blue);
-        }
-        printf("\n");
-    }
-}
-
 /* Aplica el filtro de caja a la imagen de entrada y escribe el resultado en la imagen de salida.
    Maneja bordes colocando negro por defecto.
 */
@@ -42,7 +26,7 @@ void apply(BMP_Image *imageIn, BMP_Image *imageOut)
     printf("Funcion apply");
     int width = imageIn->header.width_px;
     int height = imageIn->header.height_px;
-    
+
     for (int y = 0; y < height; y++)
     {
         for (int x = 0; x < width; x++)

@@ -32,11 +32,13 @@ void printError(int error)
  * Finally, allocate menory for image's data according to the image size.
  * Return image;
  */
-BMP_Image* createBMPImage(FILE* fptr) {
+BMP_Image *createBMPImage(FILE *fptr)
+{
 
   // Allocate memory for BMP_Image*
-  BMP_Image* image = (BMP_Image*)malloc(sizeof(BMP_Image));
-  if (image == NULL) {
+  BMP_Image *image = (BMP_Image *)malloc(sizeof(BMP_Image));
+  if (image == NULL)
+  {
     printf(" ");
     printError(MEMORY_ERROR);
     return NULL;
@@ -44,7 +46,8 @@ BMP_Image* createBMPImage(FILE* fptr) {
 
   // Read the first 54 bytes of the source into the header
   printf("  Reading header\n");
-  if (fread(&(image->header), sizeof(BMP_Header), 1, fptr) != 1) {
+  if (fread(&(image->header), sizeof(BMP_Header), 1, fptr) != 1)
+  {
     printf(" ");
     printError(FILE_ERROR);
     free(image);
@@ -61,19 +64,36 @@ BMP_Image* createBMPImage(FILE* fptr) {
   image->bytes_per_pixel = bytesPerPixel;
 
   // Allocate memory for image data
-  image->pixels = (Pixel**)malloc(dataSize);
-  if (image->pixels == NULL) {
-    printf(" ");
+  image->pixels = (Pixel **)malloc(height * sizeof(Pixel *));
+  if (image->pixels == NULL)
+  {
     printError(MEMORY_ERROR);
     free(image);
     return NULL;
   }
 
+  for (int i = 0; i < height; i++)
+  {
+    image->pixels[i] = (Pixel *)malloc(width * sizeof(Pixel));
+    if (image->pixels[i] == NULL)
+    {
+      printError(MEMORY_ERROR);
+      for (int j = 0; j < i; j++)
+      {
+        free(image->pixels[j]);
+      }
+      free(image->pixels);
+      free(image);
+      return NULL;
+    }
+  }
+
   // Read the image data
   printf("  Reading image data\n");
   readImageData(fptr, image, dataSize);
-  if (image->pixels == NULL) {
-    free(image);
+  if (image->pixels == NULL)
+  {
+    freeImage(image);
     return NULL;
   }
 
@@ -83,12 +103,22 @@ BMP_Image* createBMPImage(FILE* fptr) {
 /* The input arguments are the source file pointer, the image data pointer, and the size of image data.
  * The functions reads data from the source into the image data matriz of pixels.
  */
-void readImageData(FILE *srcFile, BMP_Image *image, int dataSize)
+void readImageData(FILE *fptr, BMP_Image *image, int dataSize)
 {
-  if (fread(image->pixels, dataSize, 1, srcFile) != 1)
+  int rowSize = (image->header.width_px * image->bytes_per_pixel + 3) & ~3; // Row size is padded to the nearest multiple of 4 bytes
+  for (int i = 0; i < image->header.height_px; i++)
   {
-    printf(" ");
-    printError(FILE_ERROR);
+    if (fread(image->pixels[i], rowSize, 1, fptr) != 1)
+    {
+      printError(FILE_ERROR);
+      for (int j = 0; j <= i; j++)
+      {
+        free(image->pixels[j]);
+      }
+      free(image->pixels);
+      image->pixels = NULL;
+      return;
+    }
   }
 }
 
@@ -128,12 +158,16 @@ void writeImage(char *destFileName, BMP_Image *dataImage)
   }
 
   // Write the image data to the destination file
-  if (fwrite(dataImage->pixels, dataImage->header.size, 1, destFile) != 1)
+  int rowSize = (dataImage->header.width_px * dataImage->bytes_per_pixel + 3) & ~3; // Row size is padded to the nearest multiple of 4 bytes
+  for (int i = 0; i < dataImage->header.height_px; i++)
   {
-    printf(" ");
-    printError(FILE_ERROR);
-    fclose(destFile);
-    return;
+    if (fwrite(dataImage->pixels[i], rowSize, 1, destFile) != 1)
+    {
+      printf(" ");
+      printError(FILE_ERROR);
+      fclose(destFile);
+      return;
+    }
   }
 
   fclose(destFile);
@@ -147,6 +181,10 @@ void freeImage(BMP_Image *image)
   {
     if (image->pixels != NULL)
     {
+      for (int i = 0; i < image->header.height_px; i++)
+      {
+        free(image->pixels[i]);
+      }
       free(image->pixels);
     }
     free(image);
@@ -202,4 +240,22 @@ void printBMPImage(BMP_Image *image)
   printf("  data size is %ld\n", sizeof(image->pixels));
   printf("  norm_height size is %d\n", image->norm_height);
   printf("  bytes per pixel is %d\n", image->bytes_per_pixel);
+}
+
+/* The function prints the pixel matrix of the BMP_Image.
+ */
+void printPixelMatrix(BMP_Image *image)
+{
+  int width = image->header.width_px;
+  int height = image->header.height_px;
+
+  for (int y = 0; y < height; y++)
+  {
+    for (int x = 0; x < width; x++)
+    {
+      Pixel *pixel = &image->pixels[y][x];
+      printf("(%d, %d, %d) ", pixel->red, pixel->green, pixel->blue);
+    }
+    printf("\n");
+  }
 }
