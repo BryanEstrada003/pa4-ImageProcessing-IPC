@@ -101,7 +101,7 @@ int main(int argc, char* argv[]) {
   printf("Apply filter\n");
   //int numThreads = 10; // You can adjust the number of threads as needed
   //apply(image_in, image_out);
-  applyParallelFirstHalf(image_in, image_out, 10);
+  applyParallelSecondHalf(image_in, image_out, 10);
 
   printf("Write image_in data %s\n", argv[2]);
   FILE* dest = fopen(argv[2], "wb");

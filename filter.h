@@ -9,6 +9,10 @@ void applyParallel(BMP_Image * imageIn, BMP_Image * imageOut, int numThreads);
 
 void *filterThreadWorker(void * args);
 
-void printPixelMatrix(BMP_Image *image);
+void applyFirstHalf(BMP_Image *imageIn, BMP_Image *imageOut);
+
+void applyParallelFirstHalf(BMP_Image *imageIn, BMP_Image *imageOut, int numThreads);
+
+void applyParallelSecondHalf(BMP_Image *imageIn, BMP_Image *imageOut, int numThreads);
 
 #endif // FILTER_H

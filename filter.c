@@ -178,7 +178,8 @@ void applyParallelFirstHalf(BMP_Image *imageIn, BMP_Image *imageOut, int numThre
     int height = imageIn->header.height_px;
     int width = imageIn->header.width_px;
     int halfHeight = height / 2; // Mitad de la imagen
-    int rowsPerThread = halfHeight / numThreads;
+    int rowsPerThread = (halfHeight + numThreads - 1) / numThreads; // Redondeo hacia arriba
+
 
     // Configurar y crear los hilos para procesar desde la parte superior hasta la mitad
     for (int i = 0; i < numThreads; i++)
@@ -189,6 +190,7 @@ void applyParallelFirstHalf(BMP_Image *imageIn, BMP_Image *imageOut, int numThre
         // Configurar los rangos de filas para cada hilo
         threadArgs[i].startRow = i * rowsPerThread; // Comienza en la parte superior
         threadArgs[i].endRow = (i == numThreads - 1) ? halfHeight : (i + 1) * rowsPerThread;
+        printf("Hilo %d: startRow = %d, endRow = %d\n", i, threadArgs[i].startRow, threadArgs[i].endRow);
 
         // Copiar el filtro al argumento del hilo
         memcpy(threadArgs[i].boxFilter, boxFilter, sizeof(float) * 9);
@@ -205,6 +207,50 @@ void applyParallelFirstHalf(BMP_Image *imageIn, BMP_Image *imageOut, int numThre
 
     // Copiar la mitad inferior de la imagen original a la imagen de salida sin cambios
     for (int y = halfHeight; y < height; y++)
+    {
+        for (int x = 0; x < width; x++)
+        {
+            imageOut->pixels[y][x] = imageIn->pixels[y][x];
+        }
+    }
+}
+
+void applyParallelSecondHalf(BMP_Image *imageIn, BMP_Image *imageOut, int numThreads)
+{
+    pthread_t threads[numThreads];
+    ThreadArgs threadArgs[numThreads];
+
+    int height = imageIn->header.height_px;
+    int width = imageIn->header.width_px;
+    int halfHeight = height / 2; // Mitad de la imagen
+    int rowsPerThread = ((height - halfHeight) + numThreads - 1) / numThreads; // Redondeo hacia arriba
+
+    // Configurar y crear los hilos para procesar desde la mitad hasta la parte inferior
+    for (int i = 0; i < numThreads; i++)
+    {
+        threadArgs[i].imageIn = imageIn;
+        threadArgs[i].imageOut = imageOut;
+
+        // Configurar los rangos de filas para cada hilo
+        threadArgs[i].startRow = halfHeight + i * rowsPerThread; // Comienza en la mitad
+        threadArgs[i].endRow = (i == numThreads - 1) ? height : halfHeight + (i + 1) * rowsPerThread;
+        printf("Hilo %d: startRow = %d, endRow = %d\n", i, threadArgs[i].startRow, threadArgs[i].endRow);
+
+        // Copiar el filtro al argumento del hilo
+        memcpy(threadArgs[i].boxFilter, boxFilter, sizeof(float) * 9);
+
+        // Crear el hilo
+        pthread_create(&threads[i], NULL, filterThreadWorker, &threadArgs[i]);
+    }
+
+    // Esperar a que todos los hilos terminen
+    for (int i = 0; i < numThreads; i++)
+    {
+        pthread_join(threads[i], NULL);
+    }
+
+    // Copiar la mitad superior de la imagen original a la imagen de salida sin cambios
+    for (int y = 0; y < halfHeight; y++)
     {
         for (int x = 0; x < width; x++)
         {
