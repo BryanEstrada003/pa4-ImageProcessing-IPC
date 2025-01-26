@@ -6,12 +6,12 @@
 #include <math.h> // Include math.h for sqrt function
 
 // Prewitt operator masks
-int prewittX[3][3] = {
+const int prewittX[3][3] = {
     {-1, 0, 1},
     {-1, 0, 1},
     {-1, 0, 1}};
 
-int prewittY[3][3] = {
+const int prewittY[3][3] = {
     {-1, -1, -1},
     {0, 0, 0},
     {1, 1, 1}};
@@ -21,164 +21,152 @@ typedef struct {
     BMP_Image *imageOut;
     int startRow;
     int endRow;
-    int prewittX[3][3];
-    int prewittY[3][3];
+    const int (*prewittX)[3];
+    const int (*prewittY)[3];
 } ThreadArgs;
 
 // Clamps the value to the range [0, 255]
 int clamp(int value) {
-    if (value < 0) return 0;
-    if (value > 255) return 255;
-    return value;
-}
-
-// Normalize the gradient magnitude to the range [0, 255]
-int normalize(int value, int maxGradient) {
-    if (maxGradient == 0) return 0; // Avoid division by zero
-    return clamp((value * 255) / maxGradient);
+    return value < 0 ? 0 : (value > 255 ? 255 : value);
 }
 
 // Ensure the BMP image structure is valid
 int validateBMPImage(BMP_Image *image) {
-    return image != NULL && image->pixels != NULL && image->header.width_px > 0 && image->header.height_px > 0;
+    return image != NULL && image->pixels != NULL &&
+           image->header.width_px > 0 && image->header.height_px > 0;
 }
 
-// Aplica el filtro de detección de bordes
-void applyEdgeDetection(BMP_Image *imageIn, BMP_Image *imageOut) {
-    if (!validateBMPImage(imageIn) || !validateBMPImage(imageOut)) {
-        fprintf(stderr, "Invalid BMP image structure.\n");
-        return;
-    }
-
+// Worker thread function
+void *edgeDetectionThreadWorker(void *args) {
+    ThreadArgs *threadArgs = (ThreadArgs *)args;
+    BMP_Image *imageIn = threadArgs->imageIn;
+    BMP_Image *imageOut = threadArgs->imageOut;
     int width = imageIn->header.width_px;
-    int height = imageIn->header.height_px;
+    int startRow = threadArgs->startRow;
+    int endRow = threadArgs->endRow;
 
-    // Determine the maximum gradient for normalization
-    int maxGradient = 0;
-    for (int y = 1; y < height - 1; y++) {
+    for (int y = startRow; y < endRow; y++) {
         for (int x = 1; x < width - 1; x++) {
-            int sumX[3] = {0, 0, 0};
-            int sumY[3] = {0, 0, 0};
+            Pixel *outPixel = &imageOut->pixels[y][x];
+            int sumX[3] = {0}, sumY[3] = {0};
+
             for (int ky = -1; ky <= 1; ky++) {
                 for (int kx = -1; kx <= 1; kx++) {
                     Pixel *pixel = &imageIn->pixels[y + ky][x + kx];
-                    int weightX = prewittX[ky + 1][kx + 1];
-                    int weightY = prewittY[ky + 1][kx + 1];
+                    int weightX = threadArgs->prewittX[ky + 1][kx + 1];
+                    int weightY = threadArgs->prewittY[ky + 1][kx + 1];
+
                     sumX[0] += pixel->red * weightX;
                     sumX[1] += pixel->green * weightX;
                     sumX[2] += pixel->blue * weightX;
+
                     sumY[0] += pixel->red * weightY;
                     sumY[1] += pixel->green * weightY;
                     sumY[2] += pixel->blue * weightY;
                 }
             }
-            int gradient = (int)sqrt(sumX[0] * sumX[0] + sumY[0] * sumY[0]);
-            if (gradient > maxGradient) {
-                maxGradient = gradient;
-            }
-        }
-    }
 
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            Pixel *outPixel = &imageOut->pixels[y][x];
-            if (y == 0 || y == height - 1 || x == 0 || x == width - 1) {
-                // Borde negro
-                outPixel->red = outPixel->green = outPixel->blue = 0;
-            } else {
-                // Aplicar filtro de Prewitt
-                int sumX[3] = {0, 0, 0};
-                int sumY[3] = {0, 0, 0};
-                for (int ky = -1; ky <= 1; ky++) {
-                    for (int kx = -1; kx <= 1; kx++) {
-                        Pixel *pixel = &imageIn->pixels[y + ky][x + kx];
-                        int weightX = prewittX[ky + 1][kx + 1];
-                        int weightY = prewittY[ky + 1][kx + 1];
-                        sumX[0] += pixel->red * weightX;
-                        sumX[1] += pixel->green * weightX;
-                        sumX[2] += pixel->blue * weightX;
-                        sumY[0] += pixel->red * weightY;
-                        sumY[1] += pixel->green * weightY;
-                        sumY[2] += pixel->blue * weightY;
-                    }
-                }
-                outPixel->red = normalize((int)sqrt(sumX[0] * sumX[0] + sumY[0] * sumY[0]), maxGradient);
-                outPixel->green = normalize((int)sqrt(sumX[1] * sumX[1] + sumY[1] * sumY[1]), maxGradient);
-                outPixel->blue = normalize((int)sqrt(sumX[2] * sumX[2] + sumY[2] * sumY[2]), maxGradient);
-            }
-        }
-    }
-}
-
-// Función del hilo
-void *edgeDetectionThreadWorker(void *args) {
-    ThreadArgs *threadArgs = (ThreadArgs *)args;
-    BMP_Image *imageIn = threadArgs->imageIn;
-    BMP_Image *imageOut = threadArgs->imageOut;
-    int startRow = threadArgs->startRow;
-    int endRow = threadArgs->endRow;
-    int width = imageIn->header.width_px;
-
-    if (!validateBMPImage(imageIn) || !validateBMPImage(imageOut)) {
-        fprintf(stderr, "Invalid BMP image structure in thread.\n");
-        return NULL;
-    }
-
-    for (int y = startRow; y < endRow; y++) {
-        for (int x = 0; x < width; x++) {
-            Pixel *outPixel = &imageOut->pixels[y][x];
-            if (y == 0 || x == 0 || y == imageIn->header.height_px - 1 || x == width - 1) {
-                outPixel->red = outPixel->green = outPixel->blue = 0;
-            } else {
-                int sumX[3] = {0, 0, 0};
-                int sumY[3] = {0, 0, 0};
-                for (int ky = -1; ky <= 1; ky++) {
-                    for (int kx = -1; kx <= 1; kx++) {
-                        Pixel *pixel = &imageIn->pixels[y + ky][x + kx];
-                        int weightX = threadArgs->prewittX[ky + 1][kx + 1];
-                        int weightY = threadArgs->prewittY[ky + 1][kx + 1];
-                        sumX[0] += pixel->red * weightX;
-                        sumX[1] += pixel->green * weightX;
-                        sumX[2] += pixel->blue * weightX;
-                        sumY[0] += pixel->red * weightY;
-                        sumY[1] += pixel->green * weightY;
-                        sumY[2] += pixel->blue * weightY;
-                    }
-                }
-                outPixel->red = clamp((int)sqrt(sumX[0] * sumX[0] + sumY[0] * sumY[0]));
-                outPixel->green = clamp((int)sqrt(sumX[1] * sumX[1] + sumY[1] * sumY[1]));
-                outPixel->blue = clamp((int)sqrt(sumX[2] * sumX[2] + sumY[2] * sumY[2]));
-            }
+            outPixel->red = clamp((int)sqrt(sumX[0] * sumX[0] + sumY[0] * sumY[0]));
+            outPixel->green = clamp((int)sqrt(sumX[1] * sumX[1] + sumY[1] * sumY[1]));
+            outPixel->blue = clamp((int)sqrt(sumX[2] * sumX[2] + sumY[2] * sumY[2]));
         }
     }
     return NULL;
 }
 
-// Aplicar detección de bordes en paralelo
+// Parallel edge detection
 void applyParallelEdgeDetection(BMP_Image *imageIn, BMP_Image *imageOut, int numThreads) {
+    if (!validateBMPImage(imageIn) || !validateBMPImage(imageOut)) {
+        fprintf(stderr, "Invalid BMP image structure.\n");
+        return;
+    }
+
     pthread_t threads[numThreads];
     ThreadArgs threadArgs[numThreads];
+    int height = imageIn->header.height_px;
+    int rowsPerThread = height / numThreads;
+    int extraRows = height % numThreads;
 
+    for (int i = 0; i < numThreads; i++) {
+        threadArgs[i].imageIn = imageIn;
+        threadArgs[i].imageOut = imageOut;
+        threadArgs[i].prewittX = prewittX;
+        threadArgs[i].prewittY = prewittY;
+        threadArgs[i].startRow = i * rowsPerThread;
+        threadArgs[i].endRow = (i + 1) * rowsPerThread;
+
+        if (i == numThreads - 1) {
+            threadArgs[i].endRow += extraRows;
+        }
+
+        if (pthread_create(&threads[i], NULL, edgeDetectionThreadWorker, &threadArgs[i]) != 0) {
+            fprintf(stderr, "Error creating thread %d\n", i);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    for (int i = 0; i < numThreads; i++) {
+        if (pthread_join(threads[i], NULL) != 0) {
+            fprintf(stderr, "Error joining thread %d\n", i);
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
+void applyParallelSecondHalfEdgeDetection(BMP_Image *imageIn, BMP_Image *imageOut, int numThreads) {
     if (!validateBMPImage(imageIn) || !validateBMPImage(imageOut)) {
         fprintf(stderr, "Invalid BMP image structure for parallel processing.\n");
         return;
     }
 
+    pthread_t threads[numThreads];
+    ThreadArgs threadArgs[numThreads];
+
     int height = imageIn->header.height_px;
-    int rowsPerThread = height / numThreads;
+    int width = imageIn->header.width_px;
+    int halfHeight = height / 2;
+    int rowsPerThread = (height - halfHeight) / numThreads;
+    int extraRows = (height - halfHeight) % numThreads;
+
+    if (numThreads > (height - halfHeight)) {
+        numThreads = height - halfHeight;  // Ajustar si hay más hilos que filas
+    }
 
     for (int i = 0; i < numThreads; i++) {
         threadArgs[i].imageIn = imageIn;
         threadArgs[i].imageOut = imageOut;
-        threadArgs[i].startRow = i * rowsPerThread;
-        threadArgs[i].endRow = (i == numThreads - 1) ? height : (i + 1) * rowsPerThread;
-        memcpy(threadArgs[i].prewittX, prewittX, sizeof(int) * 9);
-        memcpy(threadArgs[i].prewittY, prewittY, sizeof(int) * 9);
+        threadArgs[i].prewittX = prewittX;
+        threadArgs[i].prewittY = prewittY;
+        threadArgs[i].startRow = halfHeight + i * rowsPerThread;
+        threadArgs[i].endRow = threadArgs[i].startRow + rowsPerThread;
 
-        pthread_create(&threads[i], NULL, edgeDetectionThreadWorker, &threadArgs[i]);
+        if (i == numThreads - 1) {
+            threadArgs[i].endRow += extraRows;  // Último hilo maneja filas restantes
+        }
+
+        if (threadArgs[i].endRow > height) {
+            threadArgs[i].endRow = height;  // Limitar al máximo de la imagen
+        }
+
+        printf("Hilo %d: startRow = %d, endRow = %d\n", i, threadArgs[i].startRow, threadArgs[i].endRow);
+
+        if (pthread_create(&threads[i], NULL, edgeDetectionThreadWorker, &threadArgs[i]) != 0) {
+            fprintf(stderr, "Error creating thread %d\n", i);
+            exit(EXIT_FAILURE);
+        }
     }
 
     for (int i = 0; i < numThreads; i++) {
-        pthread_join(threads[i], NULL);
+        if (pthread_join(threads[i], NULL) != 0) {
+            fprintf(stderr, "Error joining thread %d\n", i);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    // Copiar la mitad superior de la imagen sin cambios
+    for (int y = 0; y < halfHeight; y++) {
+        for (int x = 0; x < width; x++) {
+            imageOut->pixels[y][x] = imageIn->pixels[y][x];
+        }
     }
 }

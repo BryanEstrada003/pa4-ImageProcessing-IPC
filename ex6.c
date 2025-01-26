@@ -114,6 +114,7 @@ int main(int argc, char *argv[])
   // int numThreads = 10; // You can adjust the number of threads as needed
   // apply(image_in, image_out);
   applyParallelEdgeDetection(image_in, image_out, 20);
+  //applyParallelSecondHalfEdgeDetection(image_in, image_out, 20);
 
   printf("Write image_in data %s\n", argv[2]);
   FILE *dest = fopen(argv[2], "wb");
