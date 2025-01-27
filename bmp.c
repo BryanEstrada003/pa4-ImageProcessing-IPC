@@ -157,7 +157,9 @@ void writeImage(char *destFileName, BMP_Image *dataImage)
   }
 
   // Write the image data to the destination file
-  int rowSize = (dataImage->header.width_px * dataImage->bytes_per_pixel + 3) & ~3; // Row size is padded to the nearest multiple of 4 bytes
+  int rowSize = (dataImage->header.width_px * dataImage->bytes_per_pixel + 3) & ~3;
+  dataImage->header.imagesize = rowSize * abs(dataImage->header.height_px);
+
   for (int i = 0; i < dataImage->header.height_px; i++)
   {
     if (fwrite(dataImage->pixels[i], rowSize, 1, destFile) != 1)
@@ -236,7 +238,9 @@ void printBMPHeader(BMP_Header *header)
 */
 void printBMPImage(BMP_Image *image)
 {
-  printf("  data size is %ld\n", sizeof(image->pixels));
+  int rowSize = (image->header.width_px * image->bytes_per_pixel + 3) & ~3;
+  int dataSize = rowSize * abs(image->header.height_px);
+  printf("  data size is %d\n", dataSize);
   printf("  norm_height size is %d\n", image->norm_height);
   printf("  bytes per pixel is %d\n", image->bytes_per_pixel);
 }
