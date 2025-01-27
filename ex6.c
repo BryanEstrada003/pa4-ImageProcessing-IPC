@@ -56,7 +56,7 @@ int main(int argc, char *argv[])
     if (x >= 0 && x < image_in->header.width_px && y >= 0 && y < image_in->header.height_px)
     {
       Pixel *pixel = &image_in->pixels[y][x];
-      printf("Pixel en (%d, %d): (R: %d, G: %d, B: %d, A: %d)\n", x, y, pixel->red, pixel->green, pixel->blue, pixel->alpha);
+      printf("Pixel en (%d, %d): (R: %d, G: %d, B: %d)\n", x, y, pixel->red, pixel->green, pixel->blue);
     }
     else
     {
@@ -86,7 +86,11 @@ int main(int argc, char *argv[])
   image_out->norm_height = image_in->norm_height;
   image_out->bytes_per_pixel = image_in->bytes_per_pixel;
   image_out->header = image_in->header;
-  image_out->pixels = image_in->pixels;
+  image_out->pixels = (Pixel **)malloc(image_out->header.height_px * sizeof(Pixel *));
+  for (int i = 0; i < image_out->header.height_px; i++)
+  {
+    image_out->pixels[i] = (Pixel *)malloc(image_out->header.width_px * image_out->bytes_per_pixel);
+  }
   image_out->header.size = image_in->header.size;
   image_out->header.imagesize = image_in->header.imagesize;
   image_out->header.width_px = image_in->header.width_px;
@@ -113,8 +117,8 @@ int main(int argc, char *argv[])
   printf("Apply filter\n");
   // int numThreads = 10; // You can adjust the number of threads as needed
   // apply(image_in, image_out);
-  applyParallelEdgeDetection(image_in, image_out, 20);
-  //applyParallelSecondHalfEdgeDetection(image_in, image_out, 20);
+  //applyParallelEdgeDetection(image_in, image_out, 20);
+  applyParallelSecondHalfEdgeDetection(image_in, image_out, 20);
 
   printf("Write image_in data %s\n", argv[2]);
   FILE *dest = fopen(argv[2], "wb");
