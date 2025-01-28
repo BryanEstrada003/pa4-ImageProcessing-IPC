@@ -67,7 +67,7 @@ void applyParallelSecondHalf(BMP_Image *imageIn, BMP_Image *imageOut, int numThr
     ThreadArgs threadArgs[numThreads];
     int height = imageIn->header.height_px;
     int width = imageIn->header.width_px;
-    int halfHeight = height / 2; // Mitad de la imagen
+    int halfHeight = height / 2;                                               // Mitad de la imagen
     int rowsPerThread = ((height - halfHeight) + numThreads - 1) / numThreads; // Redondeo hacia arriba
     // Configurar y crear los hilos para procesar desde la mitad hasta la parte inferior
     for (int i = 0; i < numThreads; i++)
@@ -77,7 +77,6 @@ void applyParallelSecondHalf(BMP_Image *imageIn, BMP_Image *imageOut, int numThr
         // Configurar los rangos de filas para cada hilo
         threadArgs[i].startRow = halfHeight + i * rowsPerThread; // Comienza en la mitad
         threadArgs[i].endRow = (i == numThreads - 1) ? height : halfHeight + (i + 1) * rowsPerThread;
-        printf("Hilo %d: startRow = %d, endRow = %d\n", i, threadArgs[i].startRow, threadArgs[i].endRow);
         // Copiar el filtro al argumento del hilo
         memcpy(threadArgs[i].boxFilter, boxFilter, sizeof(float) * 9);
         // Crear el hilo

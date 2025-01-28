@@ -134,8 +134,6 @@ void applyParallelSecondHalfEdgeDetection(BMP_Image *imageIn, BMP_Image *imageOu
             threadArgs[i].endRow = halfHeight;
         }
 
-        printf("Hilo %d: startRow = %d, endRow = %d\n", i, threadArgs[i].startRow, threadArgs[i].endRow);
-
         if (pthread_create(&threads[i], NULL, edgeDetectionThreadWorker, &threadArgs[i]) != 0)
         {
             fprintf(stderr, "Error creating thread %d\n", i);
