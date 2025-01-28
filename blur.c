@@ -61,7 +61,7 @@ void *filterThreadWorker(void *args)
     return NULL;
 }
 
-void applyParallelSecondHalf(BMP_Image *imageIn, BMP_Image *imageOut, int numThreads)
+void applyParallelFirstHalfBlur(BMP_Image *imageIn, BMP_Image *imageOut, int numThreads)
 {
     pthread_t threads[numThreads];
     ThreadArgs threadArgs[numThreads];

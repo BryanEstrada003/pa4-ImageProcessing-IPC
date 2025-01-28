@@ -88,7 +88,7 @@ void *edgeDetectionThreadWorker(void *args)
     return NULL;
 }
 
-void applyParallelSecondHalfEdgeDetection(BMP_Image *imageIn, BMP_Image *imageOut, int numThreads)
+void applyParallelSecondHalfEdge(BMP_Image *imageIn, BMP_Image *imageOut, int numThreads)
 {
     if (!validateBMPImage(imageIn) || !validateBMPImage(imageOut))
     {

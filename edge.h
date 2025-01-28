@@ -7,6 +7,6 @@
 void *edgeDetectionThreadWorker(void *args);
 
 // Aplicar detección de bordes en la segunda mitad de la imagen en paralelo
-void applyParallelSecondHalfEdgeDetection(BMP_Image *imageIn, BMP_Image *imageOut, int numThreads);
+void applyParallelSecondHalfEdge(BMP_Image *imageIn, BMP_Image *imageOut, int numThreads);
 
 #endif // EDGE_H

@@ -67,12 +67,17 @@ int main(int argc, char *argv[])
     return EXIT_FAILURE;
   }
 
+  printf("--------------------------------------------------------\n");
   readImage(source, &image_in);
   if (image_in == NULL)
   {
     fclose(source);
     return EXIT_FAILURE;
   }
+
+  printf("Read image_in data %s\n", argv[1]);
+  printBMPHeader(&image_in->header);
+  printBMPImage(image_in);
 
   if (!checkBMPValid(&image_in->header))
   {
@@ -83,7 +88,9 @@ int main(int argc, char *argv[])
   }
 
   printPixelInfo(image_in, 0, 0);
-
+  printf("--------------------------------------------------------\n");
+  
+  printf("Create output image\n");
   BMP_Image *image_out = createImageCopy(image_in);
   if (image_out == NULL)
   {
@@ -91,9 +98,16 @@ int main(int argc, char *argv[])
     fclose(source);
     return EXIT_FAILURE;
   }
+  printf("--------------------------------------------------------\n");
+  printf("Copy image_in data to image_out\n");
 
-  applyParallelSecondHalf(image_in, image_out, 10);
+  printBMPHeader(&image_out->header);
+  printBMPImage(image_out);
 
+  printf("Apply filter\n");
+  applyParallelFirstHalfBlur(image_in, image_out, 10);
+
+  printf("Write image_in data %s\n", argv[2]);
   FILE *dest = fopen(argv[2], "wb");
   if (dest == NULL)
   {
