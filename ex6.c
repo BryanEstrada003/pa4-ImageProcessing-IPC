@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "bmp.h"
-#include "filter.h"
+#include "blur.h"
 #include "edge.h" // Include edge.h for applyParallelEdgeDetection
 
 int main(int argc, char *argv[])

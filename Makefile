@@ -10,8 +10,8 @@ LDFLAGS = -lm
 SRC_PUBLICADOR = publicador_combinador.c
 SRC_DESENFOCADOR = desenfocador.c
 SRC_REALZADOR = realzador.c
-SRC_EX5 = ex5.c bmp.c filter.c edge.c
-SRC_EX6 = ex6.c bmp.c filter.c edge.c
+SRC_EX5 = ex5.c bmp.c blur.c edge.c
+SRC_EX6 = ex6.c bmp.c blur.c edge.c
 
 # Directorio de ejecutables y objetos
 BIN_DIR = executes
