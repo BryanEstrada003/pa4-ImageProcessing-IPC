@@ -88,55 +88,6 @@ void *edgeDetectionThreadWorker(void *args)
     return NULL;
 }
 
-// Parallel edge detection
-void applyParallelEdgeDetection(BMP_Image *imageIn, BMP_Image *imageOut, int numThreads)
-{
-    if (!validateBMPImage(imageIn) || !validateBMPImage(imageOut))
-    {
-        fprintf(stderr, "Invalid BMP image structure.\n");
-        return;
-    }
-
-    pthread_t threads[numThreads];
-    ThreadArgs threadArgs[numThreads];
-    int height = imageIn->header.height_px;
-    int rowsPerThread = height / numThreads;
-
-    for (int i = 0; i < numThreads; i++)
-    {
-        threadArgs[i].imageIn = imageIn;
-        threadArgs[i].imageOut = imageOut;
-        threadArgs[i].prewittX = prewittX;
-        threadArgs[i].prewittY = prewittY;
-        threadArgs[i].startRow = i * rowsPerThread;
-        threadArgs[i].endRow = (i + 1) * rowsPerThread;
-        printf("Hilo %d: startRow = %d, endRow = %d\n", i, threadArgs[i].startRow, threadArgs[i].endRow);
-        if (i == numThreads - 1)
-        {
-            threadArgs[i].endRow = height; // Asegurar que el último hilo procese hasta la última fila
-        }
-        else
-        {
-            threadArgs[i].endRow = threadArgs[i].startRow + rowsPerThread;
-        }
-
-        if (pthread_create(&threads[i], NULL, edgeDetectionThreadWorker, &threadArgs[i]) != 0)
-        {
-            fprintf(stderr, "Error creating thread %d\n", i);
-            exit(EXIT_FAILURE);
-        }
-    }
-
-    for (int i = 0; i < numThreads; i++)
-    {
-        if (pthread_join(threads[i], NULL) != 0)
-        {
-            fprintf(stderr, "Error joining thread %d\n", i);
-            exit(EXIT_FAILURE);
-        }
-    }
-}
-
 void applyParallelSecondHalfEdgeDetection(BMP_Image *imageIn, BMP_Image *imageOut, int numThreads)
 {
     if (!validateBMPImage(imageIn) || !validateBMPImage(imageOut))
