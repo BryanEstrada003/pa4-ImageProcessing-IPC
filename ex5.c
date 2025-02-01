@@ -3,26 +3,6 @@
 #include "bmp.h"
 #include "blur.h"
 
-void printPixelInfo(BMP_Image *image, int x, int y)
-{
-  if (image != NULL && image->pixels != NULL)
-  {
-    if (x >= 0 && x < image->header.width_px && y >= 0 && y < image->header.height_px)
-    {
-      Pixel *pixel = &image->pixels[y][x];
-      printf("Pixel en (%d, %d): (R: %d, G: %d, B: %d)\n", x, y, pixel->red, pixel->green, pixel->blue);
-    }
-    else
-    {
-      fprintf(stderr, "Error: coordenadas del píxel fuera de los límites de la imagen\n");
-    }
-  }
-  else
-  {
-    fprintf(stderr, "Error: la imagen o los píxeles no están correctamente inicializados\n");
-  }
-}
-
 BMP_Image *createImageCopy(BMP_Image *image_in)
 {
   BMP_Image *image_out = (BMP_Image *)malloc(sizeof(BMP_Image));
@@ -87,9 +67,8 @@ int main(int argc, char *argv[])
     return EXIT_FAILURE;
   }
 
-  printPixelInfo(image_in, 0, 0);
   printf("--------------------------------------------------------\n");
-  
+
   printf("Create output image\n");
   BMP_Image *image_out = createImageCopy(image_in);
   if (image_out == NULL)

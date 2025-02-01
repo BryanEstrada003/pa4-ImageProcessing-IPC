@@ -3,35 +3,25 @@
 #include "bmp.h"
 #include "edge.h" // Include edge.h for applyParallelEdgeDetection
 
-void printPixelInfo(BMP_Image *image, int x, int y) {
-    if (image != NULL && image->pixels != NULL) {
-        if (x >= 0 && x < image->header.width_px && y >= 0 && y < image->header.height_px) {
-            Pixel *pixel = &image->pixels[y][x];
-            printf("Pixel en (%d, %d): (R: %d, G: %d, B: %d)\n", x, y, pixel->red, pixel->green, pixel->blue);
-        } else {
-            fprintf(stderr, "Error: coordenadas del píxel fuera de los límites de la imagen\n");
-        }
-    } else {
-        fprintf(stderr, "Error: la imagen o los píxeles no están correctamente inicializados\n");
-    }
-}
+BMP_Image *createImageCopy(BMP_Image *image_in)
+{
+  BMP_Image *image_out = (BMP_Image *)malloc(sizeof(BMP_Image));
+  if (image_out == NULL)
+  {
+    printError(MEMORY_ERROR);
+    return NULL;
+  }
 
-BMP_Image* createImageCopy(BMP_Image *image_in) {
-    BMP_Image *image_out = (BMP_Image *)malloc(sizeof(BMP_Image));
-    if (image_out == NULL) {
-        printError(MEMORY_ERROR);
-        return NULL;
-    }
+  image_out->norm_height = image_in->norm_height;
+  image_out->bytes_per_pixel = image_in->bytes_per_pixel;
+  image_out->header = image_in->header;
+  image_out->pixels = (Pixel **)malloc(image_out->header.height_px * sizeof(Pixel *));
+  for (int i = 0; i < image_out->header.height_px; i++)
+  {
+    image_out->pixels[i] = (Pixel *)malloc(image_out->header.width_px * image_out->bytes_per_pixel);
+  }
 
-    image_out->norm_height = image_in->norm_height;
-    image_out->bytes_per_pixel = image_in->bytes_per_pixel;
-    image_out->header = image_in->header;
-    image_out->pixels = (Pixel **)malloc(image_out->header.height_px * sizeof(Pixel *));
-    for (int i = 0; i < image_out->header.height_px; i++) {
-        image_out->pixels[i] = (Pixel *)malloc(image_out->header.width_px * image_out->bytes_per_pixel);
-    }
-
-    return image_out;
+  return image_out;
 }
 
 int main(int argc, char *argv[])
@@ -77,7 +67,6 @@ int main(int argc, char *argv[])
     exit(EXIT_FAILURE);
   }
 
-  printPixelInfo(image_in, 0, 0);
   printf("--------------------------------------------------------\n");
 
   // Create an output image with the same header as the input image

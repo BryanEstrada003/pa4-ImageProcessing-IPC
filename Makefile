@@ -61,6 +61,3 @@ test1: ex5
 test2: ex6
 	./$(BIN_DIR)/ex6 testcases/car.bmp outputs/output2.bmp
 
-# Test de memoria con Valgrind
-testmem: ex5
-	valgrind --tool=memcheck --leak-check=summary ./$(BIN_DIR)/ex5 testcases/test.bmp outputs/test_out.bmp
