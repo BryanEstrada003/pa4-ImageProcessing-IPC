@@ -8,8 +8,8 @@
 #include <semaphore.h>
 #include <fcntl.h>
 #include "bmp.h"
-#include "blur.h"
-#include "edge.h"
+#include <math.h>
+#include <pthread.h>
 
 BMP_Image *createImageCopy(BMP_Image *image_in, void *shared_mem)
 {
@@ -26,6 +26,275 @@ BMP_Image *createImageCopy(BMP_Image *image_in, void *shared_mem)
     }
 
     return image_out;
+}
+
+//FILTRO BLUR
+
+// Filtro de caja 3x3
+float boxFilter[3][3] = {
+    {0.0625, 0.125, 0.0625},
+    {0.125, 0.25, 0.125},
+    {0.0625, 0.125, 0.0625}};
+
+typedef struct
+{
+    BMP_Image *imageIn;
+    BMP_Image *imageOut;
+    int startRow;
+    int endRow;
+    float boxFilter[3][3];
+} BlurThreadArgs;
+
+// Función del hilo
+void *filterThreadWorker(void *args)
+{
+    BlurThreadArgs *threadArgs = (BlurThreadArgs *)args;
+    BMP_Image *imageIn = threadArgs->imageIn;
+    BMP_Image *imageOut = threadArgs->imageOut;
+    int startRow = threadArgs->startRow;
+    int endRow = threadArgs->endRow;
+    int width = imageIn->header.width_px;
+
+    printf("Blur Thread starting: startRow=%d, endRow=%d\n", startRow, endRow);
+
+    for (int y = startRow; y < endRow; y++)
+    {
+        for (int x = 0; x < width; x++)
+        {
+            Pixel *outPixel = &imageOut->pixels[y][x];
+            if (y == 0 || x == 0 || y == imageIn->header.height_px - 1 || x == width - 1)
+            {
+                outPixel->red = outPixel->green = outPixel->blue = 0;
+            }
+            else
+            {
+                float sum[3] = {0, 0, 0};
+                for (int ky = -1; ky <= 1; ky++)
+                {
+                    for (int kx = -1; kx <= 1; kx++)
+                    {
+                        Pixel *inPixel = &imageIn->pixels[y + ky][x + kx];
+                        sum[0] += inPixel->red * threadArgs->boxFilter[ky + 1][kx + 1];
+                        sum[1] += inPixel->green * threadArgs->boxFilter[ky + 1][kx + 1];
+                        sum[2] += inPixel->blue * threadArgs->boxFilter[ky + 1][kx + 1];
+                    }
+                }
+                outPixel->red = (unsigned char)sum[0];
+                outPixel->green = (unsigned char)sum[1];
+                outPixel->blue = (unsigned char)sum[2];
+            }
+        }
+    }
+
+    printf("Blur Thread finished: startRow=%d, endRow=%d\n", startRow, endRow);
+    return NULL;
+}
+
+void applyParallelFirstHalfBlur(BMP_Image *imageIn, BMP_Image *imageOut, int numThreads)
+{
+    pthread_t threads[numThreads];
+    BlurThreadArgs threadArgs[numThreads];
+    int height = imageIn->header.height_px;
+    //int width = imageIn->header.width_px;
+    int halfHeight = height / 2;                                               // Mitad de la imagen
+    int rowsPerThread = ((height - halfHeight) + numThreads - 1) / numThreads; // Redondeo hacia arriba
+    // Configurar y crear los hilos para procesar desde la mitad hasta la parte inferior
+    for (int i = 0; i < numThreads; i++)
+    {
+        threadArgs[i].imageIn = imageIn;
+        threadArgs[i].imageOut = imageOut;
+        // Configurar los rangos de filas para cada hilo
+        threadArgs[i].startRow = halfHeight + i * rowsPerThread; // Comienza en la mitad
+        threadArgs[i].endRow = (i == numThreads - 1) ? height : halfHeight + (i + 1) * rowsPerThread;
+        // Copiar el filtro al argumento del hilo
+        memcpy(threadArgs[i].boxFilter, boxFilter, sizeof(float) * 9);
+        // Crear el hilo
+        pthread_create(&threads[i], NULL, filterThreadWorker, &threadArgs[i]);
+    }
+    // Esperar a que todos los hilos terminen
+    for (int i = 0; i < numThreads; i++)
+    {
+        pthread_join(threads[i], NULL);
+    }
+
+    sem_t *sem = sem_open("/blur_semaphore", 0);
+    if (sem == SEM_FAILED)
+    {
+        perror("Error opening semaphore");
+        exit(EXIT_FAILURE);
+    }
+    sem_post(sem);
+    sem_close(sem);
+
+
+    printf("Blur Threads finished\n");
+
+}
+
+//FILTRO EDGE DETECTION
+
+// Prewitt operator masks
+const int prewittX[3][3] = {
+    {-1, 0, 1},
+    {-1, 0, 1},
+    {-1, 0, 1}};
+
+const int prewittY[3][3] = {
+    {-1, -1, -1},
+    {0, 0, 0},
+    {1, 1, 1}};
+
+typedef struct
+{
+    BMP_Image *imageIn;
+    BMP_Image *imageOut;
+    int startRow;
+    int endRow;
+    const int (*prewittX)[3];
+    const int (*prewittY)[3];
+} EdgeThreadArgs;
+
+// Clamps the value to the range [0, 255]
+int clamp(int value)
+{
+    return value < 0 ? 0 : (value > 255 ? 255 : value);
+}
+
+// Ensure the BMP image structure is valid
+int validateBMPImage(BMP_Image *image)
+{
+    return image != NULL && image->pixels != NULL &&
+           image->header.width_px > 0 && image->header.height_px > 0;
+}
+
+// Worker thread function
+void *edgeDetectionThreadWorker(void *args)
+{
+    
+    EdgeThreadArgs *threadArgs = (EdgeThreadArgs *)args;
+    BMP_Image *imageIn = threadArgs->imageIn;
+    BMP_Image *imageOut = threadArgs->imageOut;
+    int width = imageIn->header.width_px;
+    int startRow = threadArgs->startRow;
+    int endRow = threadArgs->endRow;
+
+    printf("Edge Detection Thread starting: startRow=%d, endRow=%d\n", startRow, endRow);
+
+
+    for (int y = startRow; y < endRow; y++)
+    {
+        for (int x = 1; x < width - 1; x++)
+        {
+            Pixel *outPixel = &imageOut->pixels[y][x];
+            int sumX[3] = {0}, sumY[3] = {0};
+            if (y == 0 || x == 0 || y == imageIn->header.height_px - 1 || x == width - 1)
+            {
+                outPixel->red = outPixel->green = outPixel->blue = 0;
+            }
+            else
+            {
+                for (int ky = -1; ky <= 1; ky++)
+                {
+                    for (int kx = -1; kx <= 1; kx++)
+                    {
+                        Pixel *pixel = &imageIn->pixels[y + ky][x + kx];
+                        int weightX = threadArgs->prewittX[ky + 1][kx + 1];
+                        int weightY = threadArgs->prewittY[ky + 1][kx + 1];
+
+                        sumX[0] += pixel->red * weightX;
+                        sumX[1] += pixel->green * weightX;
+                        sumX[2] += pixel->blue * weightX;
+
+                        sumY[0] += pixel->red * weightY;
+                        sumY[1] += pixel->green * weightY;
+                        sumY[2] += pixel->blue * weightY;
+                    }
+                }
+
+                outPixel->red = clamp((int)sqrt(sumX[0] * sumX[0] + sumY[0] * sumY[0]));
+                outPixel->green = clamp((int)sqrt(sumX[1] * sumX[1] + sumY[1] * sumY[1]));
+                outPixel->blue = clamp((int)sqrt(sumX[2] * sumX[2] + sumY[2] * sumY[2]));
+            }
+        }
+    }
+
+    printf("Edge Detection Thread finished: startRow=%d, endRow=%d\n", startRow, endRow);
+    return NULL;
+}
+
+void applyParallelSecondHalfEdge(BMP_Image *imageIn, BMP_Image *imageOut, int numThreads)
+{
+    if (!validateBMPImage(imageIn) || !validateBMPImage(imageOut))
+    {
+        fprintf(stderr, "Invalid BMP image structure for parallel processing.\n");
+        return;
+    }
+
+    int height = imageIn->header.height_px;
+    int halfHeight = height / 2; // Mitad de la imagen
+
+    // Validar número de hilos
+    int rowsToProcess = halfHeight; // Filas en la mitad superior
+    if (numThreads > rowsToProcess)
+    {
+        numThreads = rowsToProcess; // Ajustar si hay más hilos que filas
+    }
+
+    pthread_t threads[numThreads];
+    EdgeThreadArgs threadArgs[numThreads];
+    int rowsPerThread = rowsToProcess / numThreads;
+    int extraRows = rowsToProcess % numThreads;
+
+    // Crear hilos para la mitad superior
+    for (int i = 0; i < numThreads; i++)
+    {
+        threadArgs[i].imageIn = imageIn;
+        threadArgs[i].imageOut = imageOut;
+        threadArgs[i].prewittX = prewittX;
+        threadArgs[i].prewittY = prewittY;
+
+        threadArgs[i].startRow = i * rowsPerThread;
+        threadArgs[i].endRow = threadArgs[i].startRow + rowsPerThread;
+
+        if (i == numThreads - 1)
+        {
+            threadArgs[i].endRow += extraRows; // Asignar filas adicionales al último hilo
+        }
+
+        // Validación de límites
+        if (threadArgs[i].endRow > halfHeight)
+        {
+            threadArgs[i].endRow = halfHeight;
+        }
+
+        if (pthread_create(&threads[i], NULL, edgeDetectionThreadWorker, &threadArgs[i]) != 0)
+        {
+            fprintf(stderr, "Error creating thread %d\n", i);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    for (int i = 0; i < numThreads; i++)
+    {
+        if (pthread_join(threads[i], NULL) != 0)
+        {
+            fprintf(stderr, "Error joining thread %d\n", i);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+
+    sem_t *sem = sem_open("/edge_semaphore", 0);
+    if (sem == SEM_FAILED)
+    {
+        perror("Error opening semaphore");
+        exit(EXIT_FAILURE);
+    }
+    sem_post(sem);
+    sem_close(sem);
+
+
+    printf("Edge Detection Threads finished\n");
 }
 
 int main()
@@ -89,18 +358,18 @@ int main()
             printf("Enter number of threads (or 'ex' to exit): ");
             if (scanf("%s", inputNumThreads) == 1 && strcmp(inputNumThreads, "ex") == 0)
             {
-          break;
+            break;
             }
             if (sscanf(inputNumThreads, "%d", &numThreads) != 1)
             {
-          fprintf(stderr, "Invalid input. Please enter an integer.\n");
-          while (getchar() != '\n'); // Clear the input buffer
-          continue;
+            fprintf(stderr, "Invalid input. Please enter an integer.\n");
+            while (getchar() != '\n'); // Clear the input buffer
+            continue;
             }
-            if (numThreads <= 0)
+            if (numThreads <= 0 || numThreads > 19)
             {
-          fprintf(stderr, "Number of threads must be a positive integer.\n");
-          continue;
+            fprintf(stderr, "Number of threads must be a positive integer between 1 and 19.\n");
+            continue;
             }
             break;
         }
@@ -188,7 +457,7 @@ int main()
         printBMPHeader(&image_out->header);
         printBMPImage(image_out);
 
-        printf("Apply filter\n");
+        printf("Apply filters\n");
 
         // Crear y inicializar los semáforos
         sem_t *sem_blur = sem_open("/blur_semaphore", O_CREAT, 0644, 0);
@@ -209,10 +478,49 @@ int main()
             continue;
         }
 
-        applyParallelFirstHalfBlur(shared_image_in, image_out, numThreads);
-        printf("Blur Filter applied.\n");
-        applyParallelSecondHalfEdge(shared_image_in, image_out, numThreads);
-        printf("Edge Filter applied.\n");
+        pid_t pid_blur = fork();
+        if (pid_blur == 0)
+        {
+            // Child process for blur filter
+            printf("Child process: Executing blur with %d threads...\n", numThreads);
+            applyParallelFirstHalfBlur(shared_image_in, image_out, numThreads);
+            printf("Blur Filter applied.\n");
+            exit(EXIT_SUCCESS);
+        }
+        else if (pid_blur < 0)
+        {
+            perror("Error creating blur filter process");
+            freeImage(image_in);
+            fclose(source);
+            continue;
+        }
+
+        pid_t pid_edge = fork();
+        if (pid_edge == 0)
+        {
+            // Child process for edge detection filter
+            printf("Child process: Executing edge detection with %d threads...\n", numThreads);
+            applyParallelSecondHalfEdge(shared_image_in, image_out, numThreads);
+            printf("Edge Detection Filter applied.\n");
+            exit(EXIT_SUCCESS);
+        }
+        else if (pid_edge < 0)
+        {
+            perror("Error creating edge detection filter process");
+            freeImage(image_in);
+            fclose(source);
+            continue;
+        }
+
+        // Wait for the semaphore to be signaled by the child process
+        sem_wait(sem_blur);
+        sem_wait(sem_edge);
+
+        // Wait for both child processes to finish
+        waitpid(pid_blur, NULL, 0);
+        printf("Parent process: Blur Child process finished\n");
+        waitpid(pid_edge, NULL, 0);
+        printf("Parent process: Edge Child process finished\n");
 
 
         // Reattach shared memory
