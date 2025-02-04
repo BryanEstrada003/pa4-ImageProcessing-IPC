@@ -9,7 +9,7 @@ LDFLAGS = -lm
 # Archivos fuente
 SRC_EX5 = ex5.c bmp.c
 SRC_EX6 = ex6.c bmp.c
-SRC_EX7 = ex7.c bmp.c
+SRC_EX7 = ex7.c bmp.c blur.c edge.c
 SRC_BLUR = blur.c bmp.c
 SRC_EDGE = edge.c bmp.c
 
@@ -61,7 +61,7 @@ test: blur edge ex5
 test1: blur edge ex6
 	./$(BIN_DIR)/ex6 testcases/car.bmp outputs/output.bmp 10
 
-test2: blur edge ex7
+test2: ex7
 	./$(BIN_DIR)/ex7
 
 

@@ -228,8 +228,8 @@ int main()
         }
 
         // Esperar a que el semáforo sea señalizado por el proceso hijo
-        /* sem_wait(sem_blur);
-        sem_wait(sem_edge); */
+        sem_wait(sem_blur);
+        sem_wait(sem_edge);
 
         wait(NULL);
         printf("Parent process: Blur Child process finished\n");
