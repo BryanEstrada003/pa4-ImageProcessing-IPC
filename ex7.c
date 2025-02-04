@@ -209,32 +209,11 @@ int main()
             continue;
         }
 
-        if (fork() == 0)
-        {
-            // Child process
-            printf("Child process: Executing blur\n");
-            execl("./executes/blur", "./executes/blur", NULL);
-            perror("Error executing blur");
-            exit(EXIT_FAILURE);
-        }
+        applyParallelFirstHalfBlur(shared_image_in, image_out, numThreads);
+        printf("Blur Filter applied.\n");
+        applyParallelSecondHalfEdge(shared_image_in, image_out, numThreads);
+        printf("Edge Filter applied.\n");
 
-        if (fork() == 0)
-        {
-            // Child process
-            printf("Child process: Executing edge\n");
-            execl("./executes/edge", "./executes/edge", NULL);
-            perror("Error executing edge");
-            exit(EXIT_FAILURE);
-        }
-
-        // Esperar a que el semáforo sea señalizado por el proceso hijo
-        /* sem_wait(sem_blur);
-        sem_wait(sem_edge); */
-
-        wait(NULL);
-        printf("Parent process: Blur Child process finished\n");
-        wait(NULL);
-        printf("Parent process: Edge Child process finished\n");
 
         // Reattach shared memory
         shared_image_in = (BMP_Image *)shared_mem;

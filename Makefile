@@ -1,5 +1,5 @@
 # Nombres de los ejecutables
-TARGETS = publicador_combinador desenfocador realzador ex5 ex6
+TARGETS = ex5 ex6 ex7 blur edge
 
 # Compilador y flags
 CC = gcc
@@ -7,21 +7,21 @@ CFLAGS = -Wall -Wextra -std=c11 -pthread
 LDFLAGS = -lm
 
 # Archivos fuente
-SRC_PUBLICADOR = publicador_combinador.c
-SRC_DESENFOCADOR = desenfocador.c
-SRC_REALZADOR = realzador.c
-SRC_EX5 = ex5.c bmp.c blur.c edge.c
-SRC_EX6 = ex6.c bmp.c blur.c edge.c
+SRC_EX5 = ex5.c bmp.c
+SRC_EX6 = ex6.c bmp.c
+SRC_EX7 = ex7.c bmp.c
+SRC_BLUR = blur.c bmp.c
+SRC_EDGE = edge.c bmp.c
 
 # Directorio de ejecutables y objetos
 BIN_DIR = executes
 
 # Archivos objeto
-OBJ_PUBLICADOR = $(addprefix $(BIN_DIR)/, $(SRC_PUBLICADOR:.c=.o))
-OBJ_DESENFOCADOR = $(addprefix $(BIN_DIR)/, $(SRC_DESENFOCADOR:.c=.o))
-OBJ_REALZADOR = $(addprefix $(BIN_DIR)/, $(SRC_REALZADOR:.c=.o))
 OBJ_EX5 = $(addprefix $(BIN_DIR)/, $(SRC_EX5:.c=.o))
 OBJ_EX6 = $(addprefix $(BIN_DIR)/, $(SRC_EX6:.c=.o))
+OBJ_EX7 = $(addprefix $(BIN_DIR)/, $(SRC_EX7:.c=.o))
+OBJ_BLUR = $(addprefix $(BIN_DIR)/, $(SRC_BLUR:.c=.o))
+OBJ_EDGE = $(addprefix $(BIN_DIR)/, $(SRC_EDGE:.c=.o))
 
 # Regla principal
 all: $(BIN_DIR) $(TARGETS)
@@ -31,19 +31,19 @@ $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
 # Reglas para cada ejecutable
-publicador_combinador: $(OBJ_PUBLICADOR)
-	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
-
-desenfocador: $(OBJ_DESENFOCADOR)
-	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
-
-realzador: $(OBJ_REALZADOR)
-	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
-
 ex5: $(OBJ_EX5)
 	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^ $(LDFLAGS)
 
 ex6: $(OBJ_EX6)
+	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^ $(LDFLAGS)
+
+ex7: $(OBJ_EX7)
+	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^ $(LDFLAGS)
+
+blur: $(OBJ_BLUR)
+	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^ $(LDFLAGS)
+
+edge: $(OBJ_EDGE)
 	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^ $(LDFLAGS)
 
 # Regla general para compilar archivos fuente a objetos
@@ -55,9 +55,13 @@ clean:
 	rm -f $(BIN_DIR)/*.o $(BIN_DIR)/*
 
 # Test de la compilación con un caso de prueba
-test1: ex5
-	./$(BIN_DIR)/ex5 testcases/car.bmp outputs/output.bmp
+test: blur edge ex5
+	./$(BIN_DIR)/ex5
 
-test2: ex6
-	./$(BIN_DIR)/ex6 testcases/car.bmp outputs/output2.bmp
+test1: blur edge ex6
+	./$(BIN_DIR)/ex6 testcases/car.bmp outputs/output.bmp 10
+
+test2: blur edge ex7
+	./$(BIN_DIR)/ex7
+
 

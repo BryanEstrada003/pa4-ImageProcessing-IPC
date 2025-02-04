@@ -3,6 +3,11 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <unistd.h>
+#include <semaphore.h>
+#include <fcntl.h>
 
 // Filtro de caja 3x3
 float boxFilter[3][3] = {
@@ -29,6 +34,8 @@ void *filterThreadWorker(void *args)
     int endRow = threadArgs->endRow;
     int width = imageIn->header.width_px;
 
+    printf("Thread starting: startRow=%d, endRow=%d\n", startRow, endRow);
+
     for (int y = startRow; y < endRow; y++)
     {
         for (int x = 0; x < width; x++)
@@ -45,19 +52,20 @@ void *filterThreadWorker(void *args)
                 {
                     for (int kx = -1; kx <= 1; kx++)
                     {
-                        Pixel *pixel = &imageIn->pixels[y + ky][x + kx];
-                        float weight = threadArgs->boxFilter[ky + 1][kx + 1];
-                        sum[0] += pixel->red * weight;
-                        sum[1] += pixel->green * weight;
-                        sum[2] += pixel->blue * weight;
+                        Pixel *inPixel = &imageIn->pixels[y + ky][x + kx];
+                        sum[0] += inPixel->red * threadArgs->boxFilter[ky + 1][kx + 1];
+                        sum[1] += inPixel->green * threadArgs->boxFilter[ky + 1][kx + 1];
+                        sum[2] += inPixel->blue * threadArgs->boxFilter[ky + 1][kx + 1];
                     }
                 }
-                outPixel->red = (int)sum[0];
-                outPixel->green = (int)sum[1];
-                outPixel->blue = (int)sum[2];
+                outPixel->red = (unsigned char)sum[0];
+                outPixel->green = (unsigned char)sum[1];
+                outPixel->blue = (unsigned char)sum[2];
             }
         }
     }
+
+    printf("Thread  finished: startRow=%d, endRow=%d\n", startRow, endRow);
     return NULL;
 }
 
@@ -65,34 +73,83 @@ void applyParallelFirstHalfBlur(BMP_Image *imageIn, BMP_Image *imageOut, int num
 {
     pthread_t threads[numThreads];
     ThreadArgs threadArgs[numThreads];
+
     int height = imageIn->header.height_px;
-    int width = imageIn->header.width_px;
-    int halfHeight = height / 2;                                               // Mitad de la imagen
-    int rowsPerThread = ((height - halfHeight) + numThreads - 1) / numThreads; // Redondeo hacia arriba
-    // Configurar y crear los hilos para procesar desde la mitad hasta la parte inferior
+    int halfHeight = height / 2;
+    int rowsPerThread = (halfHeight + numThreads - 1) / numThreads;
+
     for (int i = 0; i < numThreads; i++)
     {
         threadArgs[i].imageIn = imageIn;
         threadArgs[i].imageOut = imageOut;
-        // Configurar los rangos de filas para cada hilo
-        threadArgs[i].startRow = halfHeight + i * rowsPerThread; // Comienza en la mitad
-        threadArgs[i].endRow = (i == numThreads - 1) ? height : halfHeight + (i + 1) * rowsPerThread;
-        // Copiar el filtro al argumento del hilo
+        threadArgs[i].startRow = i * rowsPerThread;
+        threadArgs[i].endRow = (i == numThreads - 1) ? halfHeight : (i + 1) * rowsPerThread;
         memcpy(threadArgs[i].boxFilter, boxFilter, sizeof(float) * 9);
-        // Crear el hilo
-        pthread_create(&threads[i], NULL, filterThreadWorker, &threadArgs[i]);
-    }
-    // Esperar a que todos los hilos terminen
-    for (int i = 0; i < numThreads; i++)
-    {
-        pthread_join(threads[i], NULL);
-    }
-    // Copiar la mitad superior de la imagen original a la imagen de salida sin cambios
-    for (int y = 0; y < halfHeight; y++)
-    {
-        for (int x = 0; x < width; x++)
+        printf("Creating thread %d: startRow=%d, endRow=%d\n", i, threadArgs[i].startRow, threadArgs[i].endRow);
+        int rc = pthread_create(&threads[i], NULL, filterThreadWorker, &threadArgs[i]);
+        if (rc)
         {
-            imageOut->pixels[y][x] = imageIn->pixels[y][x];
+            fprintf(stderr, "Error creating thread %d: %d\n", i, rc);
+            exit(EXIT_FAILURE);
         }
     }
+
+    printf("Waiting for threads to finish\n");
+
+    for (int i = 0; i < numThreads; i++) {
+    int rc = pthread_join(threads[i], NULL);
+    if (rc) {
+        fprintf(stderr, "Error joining thread %d: %d\n", i, rc);
+        exit(EXIT_FAILURE);
+    }
+
+
+    sem_t *sem = sem_open("/blur_semaphore", 0);
+    if (sem == SEM_FAILED)
+    {
+        perror("Error opening semaphore");
+        exit(EXIT_FAILURE);
+    }
+    sem_post(sem);
+    sem_close(sem);
+
+    printf("Thread %d finished\n", i);
+}
+
+printf("All threads finished\n");
+}
+
+int main()
+{
+    printf("ENTRE AL MAIN DE BLUR\n");
+    key_t key = ftok("ruta/unica", 65);
+    int shmid = shmget(key, 1024 * 1024, 0666);
+    if (shmid == -1)
+    {
+        perror("Error al obtener memoria compartida");
+        return EXIT_FAILURE;
+    }
+
+    void *shared_mem = shmat(shmid, NULL, 0);
+    if (shared_mem == (void *)-1)
+    {
+        perror("Error al adjuntar memoria compartida");
+        return EXIT_FAILURE;
+    }
+
+    BMP_Image *imageIn = (BMP_Image *)shared_mem;
+    BMP_Image *imageOut = (BMP_Image *)((char *)shared_mem + 512 * 1024);
+
+    // Obtener el número de hilos de la memoria compartida
+    int *shared_numThreads = (int *)((char *)shared_mem + 1024 * 1024 - sizeof(int));
+    int numThreads = *shared_numThreads;
+
+    printf("Applying blur filter with %d threads...\n", numThreads);
+    applyParallelFirstHalfBlur(imageIn, imageOut, numThreads);
+    printf("Filter applied.\n");
+
+    // Detach shared memory
+   /*  shmdt(shared_mem); */
+
+    return 0;
 }

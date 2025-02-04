@@ -4,6 +4,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h> // Include math.h for sqrt function
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <unistd.h>
+#include <semaphore.h>
+#include <fcntl.h>
 
 // Prewitt operator masks
 const int prewittX[3][3] = {
@@ -42,6 +47,8 @@ int validateBMPImage(BMP_Image *image)
 // Worker thread function
 void *edgeDetectionThreadWorker(void *args)
 {
+    printf("Thread starting\n");
+    
     ThreadArgs *threadArgs = (ThreadArgs *)args;
     BMP_Image *imageIn = threadArgs->imageIn;
     BMP_Image *imageOut = threadArgs->imageOut;
@@ -85,6 +92,8 @@ void *edgeDetectionThreadWorker(void *args)
             }
         }
     }
+
+    printf("Thread finished\n");
     return NULL;
 }
 
@@ -97,7 +106,6 @@ void applyParallelSecondHalfEdge(BMP_Image *imageIn, BMP_Image *imageOut, int nu
     }
 
     int height = imageIn->header.height_px;
-    int width = imageIn->header.width_px;
     int halfHeight = height / 2; // Mitad de la imagen
 
     // Validar número de hilos
@@ -141,7 +149,10 @@ void applyParallelSecondHalfEdge(BMP_Image *imageIn, BMP_Image *imageOut, int nu
         }
     }
 
+
     // Esperar a que los hilos terminen
+    printf("Waiting for threads to finish\n");
+
     for (int i = 0; i < numThreads; i++)
     {
         if (pthread_join(threads[i], NULL) != 0)
@@ -151,12 +162,52 @@ void applyParallelSecondHalfEdge(BMP_Image *imageIn, BMP_Image *imageOut, int nu
         }
     }
 
-    // Copiar la mitad inferior sin cambios
-    for (int y = halfHeight; y < height; y++)
+
+    sem_t *sem = sem_open("/edge_semaphore", 0);
+    if (sem == SEM_FAILED)
     {
-        for (int x = 0; x < width; x++)
-        {
-            imageOut->pixels[y][x] = imageIn->pixels[y][x];
-        }
+        perror("Error opening semaphore");
+        exit(EXIT_FAILURE);
     }
+    sem_post(sem);
+    sem_close(sem);
+
+
+    printf("Threads finished\n");
+}
+
+
+int main()
+{
+    printf("ENTRE AL MAIN DE EDGE\n");
+    key_t key = ftok("ruta/unica", 65);
+    int shmid = shmget(key, 1024 * 1024, 0666);
+    if (shmid == -1)
+    {
+        perror("Error al obtener memoria compartida");
+        return EXIT_FAILURE;
+    }
+
+    void *shared_mem = shmat(shmid, NULL, 0);
+    if (shared_mem == (void *)-1)
+    {
+        perror("Error al adjuntar memoria compartida");
+        return EXIT_FAILURE;
+    }
+
+    BMP_Image *imageIn = (BMP_Image *)shared_mem;
+    BMP_Image *imageOut = (BMP_Image *)((char *)shared_mem + 512 * 1024);
+
+    // Obtener el número de hilos de la memoria compartida
+    int *shared_numThreads = (int *)((char *)shared_mem + 1024 * 1024 - sizeof(int));
+    int numThreads = *shared_numThreads;
+
+    printf("Applying edge detection filter with %d threads...\n", numThreads);
+    applyParallelSecondHalfEdge(imageIn, imageOut, numThreads);
+    printf("Edge detection filter applied.\n");
+
+    // Detach shared memory
+    shmdt(shared_mem);
+
+    return 0;
 }
