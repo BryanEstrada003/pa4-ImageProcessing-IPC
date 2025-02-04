@@ -1,7 +1,2 @@
 *.o
-ex5
-ex6
-publicador_combinador
-desenfocador
-realzador
-.Identifier
+*.Identifier
